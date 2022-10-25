@@ -17,7 +17,7 @@ use crate::{BLIT_SHADER_HANDLE, FXAA_SHADER_HANDLE};
 
 #[derive(Resource)]
 pub struct FXAAPipeline {
-    pub hdr_texture_bind_group: BindGroupLayout,
+    pub texture_bind_group: BindGroupLayout,
     pub fxaa_pipeline_id: CachedRenderPipelineId,
     pub blit_pipeline_id: CachedRenderPipelineId,
 }
@@ -87,7 +87,7 @@ impl FromWorld for FXAAPipeline {
         };
         let mut cache = render_world.resource_mut::<PipelineCache>();
         FXAAPipeline {
-            hdr_texture_bind_group: fxaa_texture_bind_group,
+            texture_bind_group: fxaa_texture_bind_group,
             fxaa_pipeline_id: cache.queue_render_pipeline(fxaa_descriptor),
             blit_pipeline_id: cache.queue_render_pipeline(blit_descriptor),
         }

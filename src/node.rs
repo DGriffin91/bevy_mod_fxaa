@@ -57,12 +57,9 @@ impl Node for FXAANode {
             Err(_) => return Ok(()),
         };
 
-        let ldr_texture = match &target.main_texture {
+        let texture = match &target.main_texture {
             ViewMainTexture::Hdr { ldr_texture, .. } => ldr_texture,
-            ViewMainTexture::Sdr { .. } => {
-                // non-hdr does tone mapping in the main pass node
-                return Ok(());
-            }
+            ViewMainTexture::Sdr { texture, .. } => texture,
         };
 
         let fxaa_enabled = fxaa.map_or(false, |t| t.enabled);
@@ -98,7 +95,7 @@ impl Node for FXAANode {
                         .render_device
                         .create_bind_group(&BindGroupDescriptor {
                             label: None,
-                            layout: &fxaa_pipeline.hdr_texture_bind_group,
+                            layout: &fxaa_pipeline.texture_bind_group,
                             entries: &[
                                 BindGroupEntry {
                                     binding: 0,
@@ -119,7 +116,7 @@ impl Node for FXAANode {
         let pass_descriptor = RenderPassDescriptor {
             label: Some("fxaa_pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: ldr_texture,
+                view: texture,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Default::default()), // TODO shouldn't need to be cleared
