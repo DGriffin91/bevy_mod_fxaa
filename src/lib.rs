@@ -1,5 +1,6 @@
 use bevy::{
     asset::load_internal_asset,
+    core_pipeline::core_2d,
     core_pipeline::core_3d,
     ecs::query::QueryItem,
     prelude::*,
@@ -31,10 +32,13 @@ impl ExtractComponent for FXAA {
 }
 
 const BLIT_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 3212361765411723543);
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 3212361765414793412);
 
 const FXAA_SHADER_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 2982361765441723543);
+
+pub const FXAA_NODE_3D: &str = "fxaa_node_3d";
+pub const FXAA_NODE_2D: &str = "fxaa_node_2d";
 
 pub struct FXAAPlugin;
 impl Plugin for FXAAPlugin {
@@ -50,38 +54,69 @@ impl Plugin for FXAAPlugin {
         };
         render_app.init_resource::<FXAAPipeline>();
 
-        let fxaa_node = FXAANode::new(&mut render_app.world);
+        {
+            let fxaa_node = FXAANode::new(&mut render_app.world);
+            let mut binding = render_app.world.resource_mut::<RenderGraph>();
+            let graph = binding.get_sub_graph_mut(core_3d::graph::NAME).unwrap();
 
-        let mut binding = render_app.world.resource_mut::<RenderGraph>();
-        let graph = binding.get_sub_graph_mut(core_3d::graph::NAME).unwrap();
+            graph.add_node(FXAA_NODE_3D, fxaa_node);
 
-        graph.add_node(FXAA_NODE, fxaa_node);
+            graph
+                .add_slot_edge(
+                    graph.input_node().unwrap().id,
+                    core_3d::graph::input::VIEW_ENTITY,
+                    FXAA_NODE_3D,
+                    FXAANode::IN_VIEW,
+                )
+                .unwrap();
 
-        graph
-            .add_slot_edge(
-                graph.input_node().unwrap().id,
-                core_3d::graph::input::VIEW_ENTITY,
-                FXAA_NODE,
-                FXAANode::IN_VIEW,
-            )
-            .unwrap();
+            graph
+                .remove_node_edge(
+                    core_3d::graph::node::TONEMAPPING,
+                    core_3d::graph::node::UPSCALING,
+                )
+                .unwrap();
 
-        graph
-            .remove_node_edge(
-                core_3d::graph::node::TONEMAPPING,
-                core_3d::graph::node::UPSCALING,
-            )
-            .unwrap();
+            graph
+                .add_node_edge(core_3d::graph::node::TONEMAPPING, FXAA_NODE_3D)
+                .unwrap();
 
-        graph
-            .add_node_edge(core_3d::graph::node::TONEMAPPING, FXAA_NODE)
-            .unwrap();
+            // TODO, fxaa doesn't show if this is set
+            //graph
+            //    .add_node_edge(FXAA_NODE, core_3d::graph::node::UPSCALING)
+            //    .unwrap();
+        }
+        {
+            let fxaa_node = FXAANode::new(&mut render_app.world);
+            let mut binding = render_app.world.resource_mut::<RenderGraph>();
+            let graph = binding.get_sub_graph_mut(core_2d::graph::NAME).unwrap();
 
-        // TODO, fxaa doesn't show if this is set
-        //graph
-        //    .add_node_edge(FXAA_NODE, core_3d::graph::node::UPSCALING)
-        //    .unwrap();
+            graph.add_node(FXAA_NODE_2D, fxaa_node);
+
+            graph
+                .add_slot_edge(
+                    graph.input_node().unwrap().id,
+                    core_2d::graph::input::VIEW_ENTITY,
+                    FXAA_NODE_2D,
+                    FXAANode::IN_VIEW,
+                )
+                .unwrap();
+
+            graph
+                .remove_node_edge(
+                    core_2d::graph::node::TONEMAPPING,
+                    core_2d::graph::node::UPSCALING,
+                )
+                .unwrap();
+
+            graph
+                .add_node_edge(core_2d::graph::node::TONEMAPPING, FXAA_NODE_2D)
+                .unwrap();
+
+            // TODO, fxaa doesn't show if this is set
+            //graph
+            //    .add_node_edge(FXAA_NODE, core_3d::graph::node::UPSCALING)
+            //    .unwrap();
+        }
     }
 }
-
-pub const FXAA_NODE: &str = "fxaa_node";

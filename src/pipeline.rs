@@ -85,7 +85,9 @@ impl FromWorld for FXAAPipeline {
             depth_stencil: None,
             multisample: MultisampleState::default(),
         };
+
         let mut cache = render_world.resource_mut::<PipelineCache>();
+
         FXAAPipeline {
             texture_bind_group: fxaa_texture_bind_group,
             fxaa_pipeline_id: cache.queue_render_pipeline(fxaa_descriptor),
