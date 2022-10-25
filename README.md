@@ -1,4 +1,4 @@
-# bevy_mox_fxaa
+# bevy_mod_fxaa
 
 ## FXAA post processing for Bevy
 
