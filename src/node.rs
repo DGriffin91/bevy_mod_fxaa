@@ -67,7 +67,9 @@ impl Node for FXAANode {
         let pipeline_id = if fxaa_enabled {
             fxaa_pipeline.fxaa_pipeline_id
         } else {
-            fxaa_pipeline.blit_pipeline_id
+            // fxaa_pipeline.blit_pipeline_id
+            // Don't need to blit here?
+            return Ok(());
         };
 
         let pipeline = match pipeline_cache.get_render_pipeline(pipeline_id) {
@@ -75,11 +77,9 @@ impl Node for FXAANode {
             None => return Ok(()),
         };
 
-        let main_texture = target.main_texture.texture();
-
         let mut cached_bind_group = self.cached_texture_bind_group.lock().unwrap();
         let bind_group = match &mut *cached_bind_group {
-            Some((id, bind_group)) if main_texture.id() == *id => bind_group,
+            Some((id, bind_group)) if texture.id() == *id => bind_group,
             cached_bind_group => {
                 let sampler = render_context
                     .render_device
@@ -99,7 +99,7 @@ impl Node for FXAANode {
                             entries: &[
                                 BindGroupEntry {
                                     binding: 0,
-                                    resource: BindingResource::TextureView(main_texture),
+                                    resource: BindingResource::TextureView(texture),
                                 },
                                 BindGroupEntry {
                                     binding: 1,
@@ -108,7 +108,7 @@ impl Node for FXAANode {
                             ],
                         });
 
-                let (_, bind_group) = cached_bind_group.insert((main_texture.id(), bind_group));
+                let (_, bind_group) = cached_bind_group.insert((texture.id(), bind_group));
                 bind_group
             }
         };
@@ -116,7 +116,7 @@ impl Node for FXAANode {
         let pass_descriptor = RenderPassDescriptor {
             label: Some("fxaa_pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: texture,
+                view: &target.out_texture,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Default::default()), // TODO shouldn't need to be cleared

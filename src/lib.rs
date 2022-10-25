@@ -77,9 +77,10 @@ impl Plugin for FXAAPlugin {
             .add_node_edge(core_3d::graph::node::TONEMAPPING, FXAA_NODE)
             .unwrap();
 
-        graph
-            .add_node_edge(FXAA_NODE, core_3d::graph::node::UPSCALING)
-            .unwrap();
+        // TODO, fxaa doesn't show if this is set
+        //graph
+        //    .add_node_edge(FXAA_NODE, core_3d::graph::node::UPSCALING)
+        //    .unwrap();
     }
 }
 
