@@ -1,5 +1,6 @@
 // NVIDIA FXAA 3.11
 // Original source code by TIMOTHY LOTTES
+// https://gist.github.com/kosua20/0c506b81b3812ac900048059d2383126
 //
 // Cleaned version - https://github.com/kosua20/Rendu/blob/master/resources/common/shaders/screens/fxaa.frag
 //
@@ -12,8 +13,8 @@ var screenTexture: texture_2d<f32>;
 @group(0) @binding(1)
 var samp: sampler;
 
-let EDGE_THRESHOLD_MIN: f32 = 0.0312;
-let EDGE_THRESHOLD_MAX: f32 = 0.125;
+let EDGE_THRESHOLD_MIN: f32 = 0.0312; //default is 0.0312
+let EDGE_THRESHOLD_MAX: f32 = 0.125; //default is 0.125
 let ITERATIONS: i32 = 12; //default is 12
 let SUBPIXEL_QUALITY: f32 = 0.75;
 // #define QUALITY(q) ((q) < 5 ? 1.0 : ((q) > 5 ? ((q) < 10 ? 2.0 : ((q) < 11 ? 4.0 : 8.0)) : 1.5))
