@@ -6,7 +6,6 @@ use bevy_mod_fxaa::{FXAAPlugin, FXAA};
 
 fn main() {
     App::new()
-        .insert_resource(Msaa { samples: 1 })
         .add_plugins(DefaultPlugins)
         .add_plugin(FXAAPlugin)
         .add_startup_system(setup)

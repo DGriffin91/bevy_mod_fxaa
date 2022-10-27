@@ -48,6 +48,8 @@ pub const FXAA_NODE_2D: &str = "fxaa_node_2d";
 pub struct FXAAPlugin;
 impl Plugin for FXAAPlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(Msaa { samples: 1 }); // Disable MSAA be default
+
         load_internal_asset!(app, LDR_SHADER_HANDLE, "to_ldr.wgsl", Shader::from_wgsl);
         load_internal_asset!(app, FXAA_SHADER_HANDLE, "fxaa.wgsl", Shader::from_wgsl);
         load_internal_asset!(app, BLIT_SHADER_HANDLE, "blit.wgsl", Shader::from_wgsl);

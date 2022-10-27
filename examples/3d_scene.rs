@@ -12,8 +12,7 @@ use bevy_mod_fxaa::{FXAAPlugin, FXAA};
 
 fn main() {
     let mut app = App::new();
-    app.insert_resource(Msaa { samples: 1 })
-        .add_plugins(DefaultPlugins)
+    app.add_plugins(DefaultPlugins)
         .add_plugin(FXAAPlugin)
         .add_startup_system(setup)
         .add_system(toggle_fxaa);
@@ -58,7 +57,7 @@ fn setup(
     commands
         .spawn(Camera3dBundle {
             camera: Camera {
-                hdr: false, // Should work with and without hdr
+                hdr: false, // Works with and without hdr
                 ..default()
             },
             transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
