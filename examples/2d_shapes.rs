@@ -1,5 +1,3 @@
-//! Shows how to render simple primitive shapes with a single color.
-
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 
 use bevy_mod_fxaa::{FXAAPlugin, Quality, FXAA};

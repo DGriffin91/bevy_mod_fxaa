@@ -1,4 +1,4 @@
-//! A simple 3D scene with light shining over a cube sitting on a plane.
+use std::f32::consts::PI;
 
 use bevy::{
     prelude::*,
@@ -26,6 +26,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    asset_server: Res<AssetServer>,
 ) {
     // plane
     commands.spawn(PbrBundle {
@@ -33,26 +34,51 @@ fn setup(
         material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
         ..default()
     });
-    // cube
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        material: materials.add(StandardMaterial {
-            base_color_texture: Some(images.add(uv_debug_texture())),
+
+    for i in 0..5 {
+        // cube
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Cube { size: 0.25 })),
+            material: materials.add(StandardMaterial {
+                base_color_texture: Some(images.add(uv_debug_texture())),
+                ..default()
+            }),
+            transform: Transform::from_xyz(i as f32 * 0.25 - 1.0, 0.125, -i as f32 * 0.5),
             ..default()
-        }),
-        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        });
+    }
+
+    // FlightHelmet
+    commands.spawn(SceneBundle {
+        scene: asset_server.load("FlightHelmet/FlightHelmet.gltf#Scene0"),
         ..default()
     });
+
     // light
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
-            intensity: 10000.0,
+    const HALF_SIZE: f32 = 2.0;
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadow_projection: OrthographicProjection {
+                left: -HALF_SIZE,
+                right: HALF_SIZE,
+                bottom: -HALF_SIZE,
+                top: HALF_SIZE,
+                near: -10.0 * HALF_SIZE,
+                far: 10.0 * HALF_SIZE,
+                ..default()
+            },
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_rotation(Quat::from_euler(
+            EulerRot::ZYX,
+            0.0,
+            PI * -0.15,
+            PI * -0.15,
+        )),
         ..default()
     });
+
     // camera
     commands
         .spawn(Camera3dBundle {
@@ -60,7 +86,8 @@ fn setup(
                 hdr: false, // Works with and without hdr
                 ..default()
             },
-            transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(0.7, 0.7, 1.0)
+                .looking_at(Vec3::new(0.0, 0.3, 0.0), Vec3::Y),
             ..default()
         })
         .insert(FXAA::default());

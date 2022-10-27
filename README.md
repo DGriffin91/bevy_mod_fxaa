@@ -2,7 +2,7 @@
 
 ## FXAA post processing for Bevy
 
-![demo](demo.png)
+![settings_lg](settings_lg.png)
 
 Usage:
 ```rust
