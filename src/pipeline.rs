@@ -21,16 +21,10 @@ use bevy::{
 
 use crate::{BLIT_SHADER_HANDLE, FXAA, FXAA_SHADER_HANDLE, LDR_SHADER_HANDLE};
 
-#[derive(Resource)]
-pub struct FXAAPipeline {
-    pub texture_bind_group: BindGroupLayout,
-    pub fxaa_ldr_pipeline_id: CachedRenderPipelineId,
-    pub fxaa_hdr_pipeline_id: CachedRenderPipelineId,
-    pub to_ldr_pipeline_id: CachedRenderPipelineId,
-    pub blit_pipeline_id: CachedRenderPipelineId,
-}
+#[derive(Resource, Deref)]
+pub struct FXAAPipelineBindGroup(BindGroupLayout);
 
-impl FromWorld for FXAAPipeline {
+impl FromWorld for FXAAPipelineBindGroup {
     fn from_world(render_world: &mut World) -> Self {
         let fxaa_texture_bind_group = render_world
             .resource::<RenderDevice>()
@@ -56,51 +50,7 @@ impl FromWorld for FXAAPipeline {
                 ],
             });
 
-        let fxaa_ldr_descriptor = fullscreen_vertex_pipeline_descriptor(
-            "fxaa ldr pipeline",
-            &fxaa_texture_bind_group,
-            FXAA_SHADER_HANDLE,
-            vec![],
-            "fs_main",
-            TextureFormat::bevy_default(),
-        );
-
-        let fxaa_hdr_descriptor = fullscreen_vertex_pipeline_descriptor(
-            "fxaa hdr pipeline",
-            &fxaa_texture_bind_group,
-            FXAA_SHADER_HANDLE,
-            vec!["TONEMAP".to_string()],
-            "fs_main",
-            ViewTarget::TEXTURE_FORMAT_HDR,
-        );
-
-        let to_ldr_descriptor = fullscreen_vertex_pipeline_descriptor(
-            "to ldr pipeline",
-            &fxaa_texture_bind_group,
-            LDR_SHADER_HANDLE,
-            vec![],
-            "fs_main",
-            ViewTarget::TEXTURE_FORMAT_HDR,
-        );
-
-        let blit_descriptor = fullscreen_vertex_pipeline_descriptor(
-            "blit pipeline",
-            &fxaa_texture_bind_group,
-            BLIT_SHADER_HANDLE,
-            vec![],
-            "fs_main",
-            TextureFormat::bevy_default(),
-        );
-
-        let mut cache = render_world.resource_mut::<PipelineCache>();
-
-        FXAAPipeline {
-            texture_bind_group: fxaa_texture_bind_group,
-            fxaa_ldr_pipeline_id: cache.queue_render_pipeline(fxaa_ldr_descriptor),
-            fxaa_hdr_pipeline_id: cache.queue_render_pipeline(fxaa_hdr_descriptor),
-            to_ldr_pipeline_id: cache.queue_render_pipeline(to_ldr_descriptor),
-            blit_pipeline_id: cache.queue_render_pipeline(blit_descriptor),
-        }
+        FXAAPipelineBindGroup(fxaa_texture_bind_group)
     }
 }
 
@@ -137,15 +87,25 @@ pub struct FXAATexture {
     pub output: CachedTexture,
 }
 
+#[derive(Component)]
+pub struct FXAAPipelines {
+    pub fxaa_ldr_pipeline_id: CachedRenderPipelineId,
+    pub fxaa_hdr_pipeline_id: CachedRenderPipelineId,
+    pub to_ldr_pipeline_id: CachedRenderPipelineId,
+    pub blit_pipeline_id: CachedRenderPipelineId,
+}
+
 pub fn prepare_fxaa_texture(
     mut commands: Commands,
     mut texture_cache: ResMut<TextureCache>,
+    mut pipeline_cache: ResMut<PipelineCache>,
+    bind_group: Res<FXAAPipelineBindGroup>,
     render_device: Res<RenderDevice>,
-    views: Query<(Entity, &ExtractedCamera, &ExtractedView), With<FXAA>>,
+    views: Query<(Entity, &ExtractedCamera, &ExtractedView, &FXAA)>,
 ) {
     let mut output_textures = HashMap::default();
 
-    for (entity, camera, view) in &views {
+    for (entity, camera, view, fxaa) in &views {
         if let Some(physical_target_size) = camera.physical_target_size {
             let mut texture_descriptor = TextureDescriptor {
                 label: None,
@@ -166,12 +126,62 @@ pub fn prepare_fxaa_texture(
             };
 
             texture_descriptor.label = Some("fxaa_view_target_texture");
+
             let output = output_textures
                 .entry(camera.target.clone())
                 .or_insert_with(|| texture_cache.get(&render_device, texture_descriptor))
                 .clone();
 
-            commands.entity(entity).insert(FXAATexture { output });
+            let shader_defs = fxaa.get_settings();
+            let fxaa_ldr_descriptor = fullscreen_vertex_pipeline_descriptor(
+                "fxaa ldr pipeline",
+                &bind_group,
+                FXAA_SHADER_HANDLE,
+                shader_defs,
+                "fs_main",
+                TextureFormat::bevy_default(),
+            );
+
+            let mut shader_defs = fxaa.get_settings();
+            shader_defs.push(String::from("TONEMAP"));
+            let fxaa_hdr_descriptor = fullscreen_vertex_pipeline_descriptor(
+                "fxaa hdr pipeline",
+                &bind_group,
+                FXAA_SHADER_HANDLE,
+                shader_defs,
+                "fs_main",
+                ViewTarget::TEXTURE_FORMAT_HDR,
+            );
+
+            let to_ldr_descriptor = fullscreen_vertex_pipeline_descriptor(
+                "to ldr pipeline",
+                &bind_group,
+                LDR_SHADER_HANDLE,
+                vec![],
+                "fs_main",
+                ViewTarget::TEXTURE_FORMAT_HDR,
+            );
+
+            let blit_descriptor = fullscreen_vertex_pipeline_descriptor(
+                "blit pipeline",
+                &bind_group,
+                BLIT_SHADER_HANDLE,
+                vec![],
+                "fs_main",
+                TextureFormat::bevy_default(),
+            );
+
+            let pipelines = FXAAPipelines {
+                fxaa_ldr_pipeline_id: pipeline_cache.queue_render_pipeline(fxaa_ldr_descriptor),
+                fxaa_hdr_pipeline_id: pipeline_cache.queue_render_pipeline(fxaa_hdr_descriptor),
+                to_ldr_pipeline_id: pipeline_cache.queue_render_pipeline(to_ldr_descriptor),
+                blit_pipeline_id: pipeline_cache.queue_render_pipeline(blit_descriptor),
+            };
+
+            commands
+                .entity(entity)
+                .insert(FXAATexture { output })
+                .insert(pipelines);
         }
     }
 }

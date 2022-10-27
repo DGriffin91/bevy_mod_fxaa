@@ -2,7 +2,7 @@
 
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 
-use bevy_mod_fxaa::{FXAAPlugin, FXAA};
+use bevy_mod_fxaa::{FXAAPlugin, Quality, FXAA};
 
 fn main() {
     App::new()
@@ -21,12 +21,12 @@ fn setup(
     commands
         .spawn(Camera2dBundle {
             camera: Camera {
-                hdr: false, // Should work with and without hdr
+                hdr: false, // Works with and without hdr
                 ..default()
             },
             ..default()
         })
-        .insert(FXAA { enabled: true });
+        .insert(FXAA::default());
 
     // Rectangle
     commands.spawn(SpriteBundle {
@@ -53,23 +53,34 @@ fn setup(
         transform: Transform::from_translation(Vec3::new(100., 0., 0.)),
         ..default()
     });
+
+    println!("Toggle with:\n1 - NO AA\n2 - MSAA 4\n3 - FXAA (default)");
+    println!("Threshold:\n7 - LOW\n8 - MEDIUM\n9 - HIGH (default)\n0 - ULTRA");
 }
 
 fn toggle_fxaa(keys: Res<Input<KeyCode>>, mut query: Query<&mut FXAA>, mut msaa: ResMut<Msaa>) {
-    if keys.just_pressed(KeyCode::Key1) {
-        for mut fxaa in &mut query {
+    for mut fxaa in &mut query {
+        if keys.just_pressed(KeyCode::Key1) {
             fxaa.enabled = false;
-        }
-        msaa.samples = 1;
-    } else if keys.just_pressed(KeyCode::Key2) {
-        for mut fxaa in &mut query {
+            msaa.samples = 1;
+        } else if keys.just_pressed(KeyCode::Key2) {
             fxaa.enabled = false;
-        }
-        msaa.samples = 4;
-    } else if keys.just_pressed(KeyCode::Key3) {
-        for mut fxaa in &mut query {
+            msaa.samples = 4;
+        } else if keys.just_pressed(KeyCode::Key3) {
             fxaa.enabled = true;
+            msaa.samples = 1;
+        } else if keys.just_pressed(KeyCode::Key7) {
+            fxaa.edge_threshold = Quality::Low;
+            fxaa.edge_threshold_min = Quality::Low;
+        } else if keys.just_pressed(KeyCode::Key8) {
+            fxaa.edge_threshold = Quality::Medium;
+            fxaa.edge_threshold_min = Quality::Medium;
+        } else if keys.just_pressed(KeyCode::Key9) {
+            fxaa.edge_threshold = Quality::High;
+            fxaa.edge_threshold_min = Quality::High;
+        } else if keys.just_pressed(KeyCode::Key0) {
+            fxaa.edge_threshold = Quality::Ultra;
+            fxaa.edge_threshold_min = Quality::Ultra;
         }
-        msaa.samples = 1;
     }
 }

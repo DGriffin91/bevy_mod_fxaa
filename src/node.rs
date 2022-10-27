@@ -16,7 +16,7 @@ use bevy::{
     render::{render_resource::BindGroup, view::ViewTarget},
 };
 
-use crate::pipeline::{FXAAPipeline, FXAATexture};
+use crate::pipeline::{FXAAPipelineBindGroup, FXAAPipelines, FXAATexture};
 use crate::FXAA;
 pub struct FXAANode {
     query: QueryState<
@@ -24,7 +24,8 @@ pub struct FXAANode {
             &'static ExtractedView,
             &'static ViewTarget,
             &'static FXAATexture,
-            Option<&'static FXAA>,
+            &'static FXAAPipelines,
+            &'static FXAA,
         ),
         With<ExtractedView>,
     >,
@@ -59,16 +60,15 @@ impl Node for FXAANode {
     ) -> Result<(), NodeRunError> {
         let view_entity = graph.get_input_entity(Self::IN_VIEW)?;
         let pipeline_cache = world.resource::<PipelineCache>();
-        let fxaa_pipeline = world.resource::<FXAAPipeline>();
+        let fxaa_bind_group = world.resource::<FXAAPipelineBindGroup>();
 
-        let (view, target, fxaa_texture, fxaa) = match self.query.get_manual(world, view_entity) {
-            Ok(result) => result,
-            Err(_) => return Ok(()),
-        };
+        let (view, target, fxaa_texture, pipelines, fxaa) =
+            match self.query.get_manual(world, view_entity) {
+                Ok(result) => result,
+                Err(_) => return Ok(()),
+            };
 
-        let fxaa_enabled = fxaa.map_or(false, |t| t.enabled);
-
-        if !fxaa_enabled {
+        if !fxaa.enabled {
             return Ok(());
         };
 
@@ -76,9 +76,9 @@ impl Node for FXAANode {
         let fxaa_texture = &fxaa_texture.output.default_view;
 
         let pipeline_id = if view.hdr {
-            fxaa_pipeline.to_ldr_pipeline_id
+            pipelines.to_ldr_pipeline_id
         } else {
-            fxaa_pipeline.blit_pipeline_id
+            pipelines.blit_pipeline_id
         };
         self.render_pass(
             render_context,
@@ -86,13 +86,13 @@ impl Node for FXAANode {
             pipeline_id,
             main_texture,
             fxaa_texture,
-            &fxaa_pipeline.texture_bind_group,
+            &fxaa_bind_group,
         );
 
         let pipeline_id = if view.hdr {
-            fxaa_pipeline.fxaa_hdr_pipeline_id
+            pipelines.fxaa_hdr_pipeline_id
         } else {
-            fxaa_pipeline.fxaa_ldr_pipeline_id
+            pipelines.fxaa_ldr_pipeline_id
         };
         self.render_pass(
             render_context,
@@ -100,7 +100,7 @@ impl Node for FXAANode {
             pipeline_id,
             fxaa_texture,
             main_texture,
-            &fxaa_pipeline.texture_bind_group,
+            &fxaa_bind_group,
         );
 
         Ok(())

@@ -12,16 +12,66 @@ use bevy::{
     },
 };
 use node::FXAANode;
-use pipeline::FXAAPipeline;
+use pipeline::FXAAPipelineBindGroup;
 
 use crate::pipeline::prepare_fxaa_texture;
 
 mod node;
 mod pipeline;
 
+#[derive(Clone)]
+pub enum Quality {
+    Low,
+    Medium,
+    High,
+    Ultra,
+}
+
+impl Quality {
+    fn get_str(&self) -> &str {
+        match self {
+            Quality::Low => "LOW",
+            Quality::Medium => "MEDIUM",
+            Quality::High => "HIGH",
+            Quality::Ultra => "ULTRA",
+        }
+    }
+}
+
 #[derive(Component, Clone)]
 pub struct FXAA {
     pub enabled: bool,
+
+    //   0.250 - low quality
+    //   0.166 - medium quality
+    //   0.125 - high quality
+    // The minimum amount of local contrast required to apply algorithm.
+    pub edge_threshold: Quality,
+
+    //   0.0833 - low quality, (the start of visible unfiltered edges)
+    //   0.0625 - medium quality
+    //   0.0312 - high quality, (visible limit)
+    // Trims the algorithm from processing darks.
+    pub edge_threshold_min: Quality,
+}
+
+impl Default for FXAA {
+    fn default() -> Self {
+        FXAA {
+            enabled: true,
+            edge_threshold: Quality::High,
+            edge_threshold_min: Quality::High,
+        }
+    }
+}
+
+impl FXAA {
+    pub fn get_settings(&self) -> Vec<String> {
+        vec![
+            format!("EDGE_THRESH_{}", self.edge_threshold.get_str()),
+            format!("EDGE_THRESH_MIN_{}", self.edge_threshold_min.get_str()),
+        ]
+    }
 }
 
 impl ExtractComponent for FXAA {
@@ -61,7 +111,7 @@ impl Plugin for FXAAPlugin {
             Err(_) => return,
         };
         render_app
-            .init_resource::<FXAAPipeline>()
+            .init_resource::<FXAAPipelineBindGroup>()
             .add_system_to_stage(RenderStage::Prepare, prepare_fxaa_texture);
 
         {
