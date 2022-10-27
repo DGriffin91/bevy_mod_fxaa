@@ -20,7 +20,13 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands
-        .spawn(Camera2dBundle::default())
+        .spawn(Camera2dBundle {
+            camera: Camera {
+                hdr: true,
+                ..default()
+            },
+            ..default()
+        })
         .insert(FXAA { enabled: true });
 
     // Rectangle

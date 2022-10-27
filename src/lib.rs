@@ -8,11 +8,13 @@ use bevy::{
     render::{
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_graph::RenderGraph,
-        RenderApp,
+        RenderApp, RenderStage,
     },
 };
 use node::FXAANode;
 use pipeline::FXAAPipeline;
+
+use crate::pipeline::prepare_fxaa_texture;
 
 mod node;
 mod pipeline;
@@ -31,7 +33,7 @@ impl ExtractComponent for FXAA {
     }
 }
 
-const BLIT_SHADER_HANDLE: HandleUntyped =
+const LDR_SHADER_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 3212361765414793412);
 
 const FXAA_SHADER_HANDLE: HandleUntyped =
@@ -43,7 +45,7 @@ pub const FXAA_NODE_2D: &str = "fxaa_node_2d";
 pub struct FXAAPlugin;
 impl Plugin for FXAAPlugin {
     fn build(&self, app: &mut App) {
-        load_internal_asset!(app, BLIT_SHADER_HANDLE, "blit.wgsl", Shader::from_wgsl);
+        load_internal_asset!(app, LDR_SHADER_HANDLE, "to_ldr.wgsl", Shader::from_wgsl);
         load_internal_asset!(app, FXAA_SHADER_HANDLE, "fxaa.wgsl", Shader::from_wgsl);
 
         app.add_plugin(ExtractComponentPlugin::<FXAA>::default());
@@ -52,7 +54,9 @@ impl Plugin for FXAAPlugin {
             Ok(render_app) => render_app,
             Err(_) => return,
         };
-        render_app.init_resource::<FXAAPipeline>();
+        render_app
+            .init_resource::<FXAAPipeline>()
+            .add_system_to_stage(RenderStage::Prepare, prepare_fxaa_texture);
 
         {
             let fxaa_node = FXAANode::new(&mut render_app.world);
@@ -71,20 +75,12 @@ impl Plugin for FXAAPlugin {
                 .unwrap();
 
             graph
-                .remove_node_edge(
-                    core_3d::graph::node::TONEMAPPING,
-                    core_3d::graph::node::UPSCALING,
-                )
+                .add_node_edge(core_3d::graph::node::MAIN_PASS, FXAA_NODE_3D)
                 .unwrap();
 
             graph
-                .add_node_edge(core_3d::graph::node::TONEMAPPING, FXAA_NODE_3D)
+                .add_node_edge(FXAA_NODE_3D, core_3d::graph::node::TONEMAPPING)
                 .unwrap();
-
-            // TODO, fxaa doesn't show if this is set
-            //graph
-            //    .add_node_edge(FXAA_NODE, core_3d::graph::node::UPSCALING)
-            //    .unwrap();
         }
         {
             let fxaa_node = FXAANode::new(&mut render_app.world);
@@ -103,20 +99,12 @@ impl Plugin for FXAAPlugin {
                 .unwrap();
 
             graph
-                .remove_node_edge(
-                    core_2d::graph::node::TONEMAPPING,
-                    core_2d::graph::node::UPSCALING,
-                )
+                .add_node_edge(core_2d::graph::node::MAIN_PASS, FXAA_NODE_2D)
                 .unwrap();
 
             graph
-                .add_node_edge(core_2d::graph::node::TONEMAPPING, FXAA_NODE_2D)
+                .add_node_edge(FXAA_NODE_2D, core_2d::graph::node::TONEMAPPING)
                 .unwrap();
-
-            // TODO, fxaa doesn't show if this is set
-            //graph
-            //    .add_node_edge(FXAA_NODE, core_3d::graph::node::UPSCALING)
-            //    .unwrap();
         }
     }
 }
