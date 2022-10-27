@@ -75,30 +75,29 @@ impl Node for FXAANode {
         let main_texture = target.main_texture.texture();
         let fxaa_texture = &fxaa_texture.output.default_view;
 
-        if view.hdr {
-            self.render_pass(
-                render_context,
-                pipeline_cache,
-                fxaa_pipeline.to_ldr_pipeline_id,
-                main_texture,
-                fxaa_texture,
-                &fxaa_pipeline.texture_bind_group,
-            );
+        let pipeline_id = if view.hdr {
+            fxaa_pipeline.to_ldr_pipeline_id
         } else {
-            self.render_pass(
-                render_context,
-                pipeline_cache,
-                fxaa_pipeline.blit_pipeline_id,
-                main_texture,
-                fxaa_texture,
-                &fxaa_pipeline.texture_bind_group,
-            );
-        }
-
+            fxaa_pipeline.blit_pipeline_id
+        };
         self.render_pass(
             render_context,
             pipeline_cache,
-            fxaa_pipeline.fxaa_pipeline_id,
+            pipeline_id,
+            main_texture,
+            fxaa_texture,
+            &fxaa_pipeline.texture_bind_group,
+        );
+
+        let pipeline_id = if view.hdr {
+            fxaa_pipeline.fxaa_hdr_pipeline_id
+        } else {
+            fxaa_pipeline.fxaa_ldr_pipeline_id
+        };
+        self.render_pass(
+            render_context,
+            pipeline_cache,
+            pipeline_id,
             fxaa_texture,
             main_texture,
             &fxaa_pipeline.texture_bind_group,

@@ -71,7 +71,11 @@ fn fs_main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     // If the luma variation is lower that a threshold (or if we are in a really dark area), we are not on an edge, don't perform any AA.
     if (lumaRange < max(EDGE_THRESHOLD_MIN, lumaMax*EDGE_THRESHOLD_MAX)) {
-        return vec4(tonemap_invert(centerSample.rgb), centerSample.a);
+        var col = centerSample;
+        #ifdef TONEMAP
+            col = vec4(tonemap_invert(col.rgb), col.a);
+        #endif
+        return col;
     }
 
     // Query the 4 remaining corners lumas.
@@ -236,6 +240,9 @@ fn fs_main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
 
     // Read the color at the new UV coordinates, and use it.
-    let finalColor = textureSampleLevel(screenTexture, samp, finalUv, 0.0).rgb;
-    return vec4<f32>(tonemap_invert(finalColor), centerSample.a);
+    var finalColor = textureSampleLevel(screenTexture, samp, finalUv, 0.0).rgb;
+    #ifdef TONEMAP
+        finalColor = tonemap_invert(finalColor);
+    #endif
+    return vec4<f32>(finalColor, centerSample.a);
 }

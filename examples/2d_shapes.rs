@@ -22,7 +22,7 @@ fn setup(
     commands
         .spawn(Camera2dBundle {
             camera: Camera {
-                hdr: true,
+                hdr: false, // Should work with and without hdr
                 ..default()
             },
             ..default()

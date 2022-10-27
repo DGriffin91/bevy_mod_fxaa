@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use bevy::{
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
     prelude::*,
@@ -12,7 +14,7 @@ use bevy::{
         },
         renderer::RenderDevice,
         texture::{BevyDefault, CachedTexture, TextureCache},
-        view::ViewTarget,
+        view::{ExtractedView, ViewTarget},
     },
     utils::HashMap,
 };
@@ -22,7 +24,8 @@ use crate::{BLIT_SHADER_HANDLE, FXAA, FXAA_SHADER_HANDLE, LDR_SHADER_HANDLE};
 #[derive(Resource)]
 pub struct FXAAPipeline {
     pub texture_bind_group: BindGroupLayout,
-    pub fxaa_pipeline_id: CachedRenderPipelineId,
+    pub fxaa_ldr_pipeline_id: CachedRenderPipelineId,
+    pub fxaa_hdr_pipeline_id: CachedRenderPipelineId,
     pub to_ldr_pipeline_id: CachedRenderPipelineId,
     pub blit_pipeline_id: CachedRenderPipelineId,
 }
@@ -53,71 +56,79 @@ impl FromWorld for FXAAPipeline {
                 ],
             });
 
-        let fxaa_descriptor = RenderPipelineDescriptor {
-            label: Some("fxaa pipeline".into()),
-            layout: Some(vec![fxaa_texture_bind_group.clone()]),
-            vertex: fullscreen_shader_vertex_state(),
-            fragment: Some(FragmentState {
-                shader: FXAA_SHADER_HANDLE.typed(),
-                shader_defs: vec![],
-                entry_point: "fs_main".into(),
-                targets: vec![Some(ColorTargetState {
-                    format: ViewTarget::TEXTURE_FORMAT_HDR,
-                    blend: None,
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-        };
+        let fxaa_ldr_descriptor = fullscreen_vertex_pipeline_descriptor(
+            "fxaa ldr pipeline",
+            &fxaa_texture_bind_group,
+            FXAA_SHADER_HANDLE,
+            vec![],
+            "fs_main",
+            TextureFormat::bevy_default(),
+        );
 
-        let to_ldr_descriptor = RenderPipelineDescriptor {
-            label: Some("to ldr pipeline".into()),
-            layout: Some(vec![fxaa_texture_bind_group.clone()]),
-            vertex: fullscreen_shader_vertex_state(),
-            fragment: Some(FragmentState {
-                shader: LDR_SHADER_HANDLE.typed(),
-                shader_defs: vec![],
-                entry_point: "fs_main".into(),
-                targets: vec![Some(ColorTargetState {
-                    format: ViewTarget::TEXTURE_FORMAT_HDR,
-                    blend: None,
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-        };
+        let fxaa_hdr_descriptor = fullscreen_vertex_pipeline_descriptor(
+            "fxaa hdr pipeline",
+            &fxaa_texture_bind_group,
+            FXAA_SHADER_HANDLE,
+            vec!["TONEMAP".to_string()],
+            "fs_main",
+            ViewTarget::TEXTURE_FORMAT_HDR,
+        );
 
-        let blit_descriptor = RenderPipelineDescriptor {
-            label: Some("blit pipeline".into()),
-            layout: Some(vec![fxaa_texture_bind_group.clone()]),
-            vertex: fullscreen_shader_vertex_state(),
-            fragment: Some(FragmentState {
-                shader: BLIT_SHADER_HANDLE.typed(),
-                shader_defs: vec![],
-                entry_point: "fs_main".into(),
-                targets: vec![Some(ColorTargetState {
-                    format: TextureFormat::bevy_default(),
-                    blend: None,
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-        };
+        let to_ldr_descriptor = fullscreen_vertex_pipeline_descriptor(
+            "to ldr pipeline",
+            &fxaa_texture_bind_group,
+            LDR_SHADER_HANDLE,
+            vec![],
+            "fs_main",
+            ViewTarget::TEXTURE_FORMAT_HDR,
+        );
+
+        let blit_descriptor = fullscreen_vertex_pipeline_descriptor(
+            "blit pipeline",
+            &fxaa_texture_bind_group,
+            BLIT_SHADER_HANDLE,
+            vec![],
+            "fs_main",
+            TextureFormat::bevy_default(),
+        );
 
         let mut cache = render_world.resource_mut::<PipelineCache>();
 
         FXAAPipeline {
             texture_bind_group: fxaa_texture_bind_group,
-            fxaa_pipeline_id: cache.queue_render_pipeline(fxaa_descriptor),
+            fxaa_ldr_pipeline_id: cache.queue_render_pipeline(fxaa_ldr_descriptor),
+            fxaa_hdr_pipeline_id: cache.queue_render_pipeline(fxaa_hdr_descriptor),
             to_ldr_pipeline_id: cache.queue_render_pipeline(to_ldr_descriptor),
             blit_pipeline_id: cache.queue_render_pipeline(blit_descriptor),
         }
+    }
+}
+
+fn fullscreen_vertex_pipeline_descriptor(
+    label: &'static str,
+    bind_group_layout: &BindGroupLayout,
+    shader: HandleUntyped,
+    shader_defs: Vec<String>,
+    entry_point: &'static str,
+    format: TextureFormat,
+) -> RenderPipelineDescriptor {
+    RenderPipelineDescriptor {
+        label: Some(label.into()),
+        layout: Some(vec![bind_group_layout.clone()]),
+        vertex: fullscreen_shader_vertex_state(),
+        fragment: Some(FragmentState {
+            shader: shader.typed(),
+            shader_defs,
+            entry_point: Cow::Borrowed(entry_point),
+            targets: vec![Some(ColorTargetState {
+                format: format,
+                blend: None,
+                write_mask: ColorWrites::ALL,
+            })],
+        }),
+        primitive: PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: MultisampleState::default(),
     }
 }
 
@@ -130,11 +141,11 @@ pub fn prepare_fxaa_texture(
     mut commands: Commands,
     mut texture_cache: ResMut<TextureCache>,
     render_device: Res<RenderDevice>,
-    views: Query<(Entity, &ExtractedCamera), With<FXAA>>,
+    views: Query<(Entity, &ExtractedCamera, &ExtractedView), With<FXAA>>,
 ) {
     let mut output_textures = HashMap::default();
 
-    for (entity, camera) in &views {
+    for (entity, camera, view) in &views {
         if let Some(physical_target_size) = camera.physical_target_size {
             let mut texture_descriptor = TextureDescriptor {
                 label: None,
@@ -146,7 +157,11 @@ pub fn prepare_fxaa_texture(
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
-                format: ViewTarget::TEXTURE_FORMAT_HDR,
+                format: if view.hdr {
+                    ViewTarget::TEXTURE_FORMAT_HDR
+                } else {
+                    TextureFormat::bevy_default()
+                },
                 usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             };
 
