@@ -7,23 +7,24 @@ use bevy::{
             BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
             CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d, FragmentState,
             MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor,
-            SamplerBindingType, ShaderStages, TextureDescriptor, TextureDimension,
+            SamplerBindingType, ShaderStages, TextureDescriptor, TextureDimension, TextureFormat,
             TextureSampleType, TextureUsages, TextureViewDimension,
         },
         renderer::RenderDevice,
-        texture::{CachedTexture, TextureCache},
+        texture::{BevyDefault, CachedTexture, TextureCache},
         view::ViewTarget,
     },
     utils::HashMap,
 };
 
-use crate::{FXAA, FXAA_SHADER_HANDLE, LDR_SHADER_HANDLE};
+use crate::{BLIT_SHADER_HANDLE, FXAA, FXAA_SHADER_HANDLE, LDR_SHADER_HANDLE};
 
 #[derive(Resource)]
 pub struct FXAAPipeline {
     pub texture_bind_group: BindGroupLayout,
     pub fxaa_pipeline_id: CachedRenderPipelineId,
     pub to_ldr_pipeline_id: CachedRenderPipelineId,
+    pub blit_pipeline_id: CachedRenderPipelineId,
 }
 
 impl FromWorld for FXAAPipeline {
@@ -90,12 +91,32 @@ impl FromWorld for FXAAPipeline {
             multisample: MultisampleState::default(),
         };
 
+        let blit_descriptor = RenderPipelineDescriptor {
+            label: Some("blit pipeline".into()),
+            layout: Some(vec![fxaa_texture_bind_group.clone()]),
+            vertex: fullscreen_shader_vertex_state(),
+            fragment: Some(FragmentState {
+                shader: BLIT_SHADER_HANDLE.typed(),
+                shader_defs: vec![],
+                entry_point: "fs_main".into(),
+                targets: vec![Some(ColorTargetState {
+                    format: TextureFormat::bevy_default(),
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+        };
+
         let mut cache = render_world.resource_mut::<PipelineCache>();
 
         FXAAPipeline {
             texture_bind_group: fxaa_texture_bind_group,
             fxaa_pipeline_id: cache.queue_render_pipeline(fxaa_descriptor),
             to_ldr_pipeline_id: cache.queue_render_pipeline(to_ldr_descriptor),
+            blit_pipeline_id: cache.queue_render_pipeline(blit_descriptor),
         }
     }
 }

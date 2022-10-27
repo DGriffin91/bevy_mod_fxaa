@@ -39,6 +39,9 @@ const LDR_SHADER_HANDLE: HandleUntyped =
 const FXAA_SHADER_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 2982361765441723543);
 
+const BLIT_SHADER_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 2082981732578979433);
+
 pub const FXAA_NODE_3D: &str = "fxaa_node_3d";
 pub const FXAA_NODE_2D: &str = "fxaa_node_2d";
 
@@ -47,6 +50,7 @@ impl Plugin for FXAAPlugin {
     fn build(&self, app: &mut App) {
         load_internal_asset!(app, LDR_SHADER_HANDLE, "to_ldr.wgsl", Shader::from_wgsl);
         load_internal_asset!(app, FXAA_SHADER_HANDLE, "fxaa.wgsl", Shader::from_wgsl);
+        load_internal_asset!(app, BLIT_SHADER_HANDLE, "blit.wgsl", Shader::from_wgsl);
 
         app.add_plugin(ExtractComponentPlugin::<FXAA>::default());
 
