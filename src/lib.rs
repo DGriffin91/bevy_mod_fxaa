@@ -28,7 +28,7 @@ pub enum Quality {
 }
 
 impl Quality {
-    fn get_str(&self) -> &str {
+    pub fn get_str(&self) -> &str {
         match self {
             Quality::Low => "LOW",
             Quality::Medium => "MEDIUM",

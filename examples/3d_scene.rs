@@ -13,7 +13,7 @@ use bevy_mod_fxaa::{FXAAPlugin, Quality, FXAA};
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
-        .add_plugin(FXAAPlugin)
+        .add_plugin(FXAAPlugin) // Disables MSAA by default.
         .add_startup_system(setup)
         .add_system(toggle_fxaa);
 
@@ -35,8 +35,8 @@ fn setup(
         ..default()
     });
 
+    // cubes
     for i in 0..5 {
-        // cube
         commands.spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 0.25 })),
             material: materials.add(StandardMaterial {
@@ -48,7 +48,7 @@ fn setup(
         });
     }
 
-    // FlightHelmet
+    // Flight Helmet
     commands.spawn(SceneBundle {
         scene: asset_server.load("FlightHelmet/FlightHelmet.gltf#Scene0"),
         ..default()
@@ -97,28 +97,45 @@ fn setup(
 }
 
 fn toggle_fxaa(keys: Res<Input<KeyCode>>, mut query: Query<&mut FXAA>, mut msaa: ResMut<Msaa>) {
+    let set_no_aa = keys.just_pressed(KeyCode::Key1);
+    let set_msaa = keys.just_pressed(KeyCode::Key2);
+    let set_fxaa = keys.just_pressed(KeyCode::Key3);
+    let fxaa_low = keys.just_pressed(KeyCode::Key7);
+    let fxaa_med = keys.just_pressed(KeyCode::Key8);
+    let fxaa_high = keys.just_pressed(KeyCode::Key9);
+    let fxaa_ultra = keys.just_pressed(KeyCode::Key0);
+    let set_fxaa = set_fxaa | fxaa_low | fxaa_med | fxaa_high | fxaa_ultra;
     for mut fxaa in &mut query {
-        if keys.just_pressed(KeyCode::Key1) {
-            fxaa.enabled = false;
-            msaa.samples = 1;
-        } else if keys.just_pressed(KeyCode::Key2) {
+        if set_msaa {
             fxaa.enabled = false;
             msaa.samples = 4;
-        } else if keys.just_pressed(KeyCode::Key3) {
-            fxaa.enabled = true;
+            info!("MSAA 4x");
+        }
+        if set_no_aa {
+            fxaa.enabled = false;
             msaa.samples = 1;
-        } else if keys.just_pressed(KeyCode::Key7) {
+            info!("NO AA");
+        }
+        if set_no_aa | set_fxaa {
+            msaa.samples = 1;
+        }
+        if fxaa_low {
             fxaa.edge_threshold = Quality::Low;
             fxaa.edge_threshold_min = Quality::Low;
-        } else if keys.just_pressed(KeyCode::Key8) {
+        } else if fxaa_med {
             fxaa.edge_threshold = Quality::Medium;
             fxaa.edge_threshold_min = Quality::Medium;
-        } else if keys.just_pressed(KeyCode::Key9) {
+        } else if fxaa_high {
             fxaa.edge_threshold = Quality::High;
             fxaa.edge_threshold_min = Quality::High;
-        } else if keys.just_pressed(KeyCode::Key0) {
+        } else if fxaa_ultra {
             fxaa.edge_threshold = Quality::Ultra;
             fxaa.edge_threshold_min = Quality::Ultra;
+        }
+        if set_fxaa {
+            fxaa.enabled = true;
+            msaa.samples = 1;
+            info!("FXAA {}", fxaa.edge_threshold.get_str());
         }
     }
 }

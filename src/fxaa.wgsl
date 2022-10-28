@@ -13,7 +13,7 @@ var screenTexture: texture_2d<f32>;
 @group(0) @binding(1)
 var samp: sampler;
 
-// The minimum amount of local contrast required to apply algorithm.
+// Trims the algorithm from processing darks.
 #ifdef EDGE_THRESH_MIN_LOW
     let EDGE_THRESHOLD_MIN: f32 = 0.0833;
 #endif
@@ -30,7 +30,7 @@ var samp: sampler;
     let EDGE_THRESHOLD_MIN: f32 = 0.0156;
 #endif
 
-// Trims the algorithm from processing darks.
+// The minimum amount of local contrast required to apply algorithm.
 #ifdef EDGE_THRESH_LOW
     let EDGE_THRESHOLD_MAX: f32 = 0.250;
 #endif
@@ -127,8 +127,13 @@ fn fs_main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let lumaUpCorners = lumaUpRight + lumaUpLeft;
 
     // Compute an estimation of the gradient along the horizontal and vertical axis.
-    let edgeHorizontal = abs(-2.0 * lumaLeft + lumaLeftCorners) + abs(-2.0 * lumaCenter + lumaDownUp) * 2.0 + abs(-2.0 * lumaRight + lumaRightCorners);
-    let edgeVertical = abs(-2.0 * lumaUp + lumaUpCorners) + abs(-2.0 * lumaCenter + lumaLeftRight) * 2.0 + abs(-2.0 * lumaDown + lumaDownCorners);
+    let edgeHorizontal = abs(-2.0 * lumaLeft   + lumaLeftCorners)  + 
+                         abs(-2.0 * lumaCenter + lumaDownUp) * 2.0 + 
+                         abs(-2.0 * lumaRight  + lumaRightCorners);
+
+    let edgeVertical =   abs(-2.0 * lumaUp     + lumaUpCorners)       + 
+                         abs(-2.0 * lumaCenter + lumaLeftRight) * 2.0 + 
+                         abs(-2.0 * lumaDown   + lumaDownCorners);
 
     // Is the local edge horizontal or vertical ?
     let isHorizontal = (edgeHorizontal >= edgeVertical);
@@ -148,16 +153,16 @@ fn fs_main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let is1Steepest = abs(gradient1) >= abs(gradient2);
 
     // Gradient in the corresponding direction, normalized.
-    let gradientScaled = 0.25*max(abs(gradient1), abs(gradient2));
+    let gradientScaled = 0.25 * max(abs(gradient1), abs(gradient2));
 
     // Average luma in the correct direction.
     var lumaLocalAverage = 0.0;
     if (is1Steepest) {
         // Switch the direction
         stepLength = -stepLength;
-        lumaLocalAverage = 0.5*(luma1 + lumaCenter);
+        lumaLocalAverage = 0.5 * (luma1 + lumaCenter);
     } else {
-        lumaLocalAverage = 0.5*(luma2 + lumaCenter);
+        lumaLocalAverage = 0.5 * (luma2 + lumaCenter);
     }
 
     // Shift UV in the correct direction by half a pixel.
@@ -195,12 +200,12 @@ fn fs_main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     if (!reachedBoth) {
         for (var i: i32 = 2; i < ITERATIONS; i = i + 1) {
             // If needed, read luma in 1st direction, compute delta.
-            if (!reached1){ 
+            if (!reached1) { 
                 lumaEnd1 = rgb2luma(textureSampleLevel(screenTexture, samp, uv1, 0.0).rgb);
                 lumaEnd1 = lumaEnd1 - lumaLocalAverage;
             }
             // If needed, read luma in opposite direction, compute delta.
-            if (!reached2){ 
+            if (!reached2) { 
                 lumaEnd2 = rgb2luma(textureSampleLevel(screenTexture, samp, uv2, 0.0).rgb);
                 lumaEnd2 = lumaEnd2 - lumaLocalAverage;
             }
@@ -210,10 +215,10 @@ fn fs_main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             reachedBoth = reached1 && reached2;
 
             // If the side is not reached, we continue to explore in this direction, with a variable quality.
-            if (!reached1){
+            if (!reached1) {
                 uv1 = uv1 - offset * QUALITY(i);
             }
-            if (!reached2){
+            if (!reached2) {
                 uv2 = uv2 + offset * QUALITY(i);
             }
 
@@ -253,9 +258,9 @@ fn fs_main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     // Sub-pixel shifting
     // Full weighted average of the luma over the 3x3 neighborhood.
-    let lumaAverage = (1.0/12.0) * (2.0 * (lumaDownUp + lumaLeftRight) + lumaLeftCorners + lumaRightCorners);
+    let lumaAverage = (1.0 / 12.0) * (2.0 * (lumaDownUp + lumaLeftRight) + lumaLeftCorners + lumaRightCorners);
     // Ratio of the delta between the global average and the center luma, over the luma range in the 3x3 neighborhood.
-    let subPixelOffset1 = clamp(abs(lumaAverage - lumaCenter)/lumaRange, 0.0, 1.0);
+    let subPixelOffset1 = clamp(abs(lumaAverage - lumaCenter) / lumaRange, 0.0, 1.0);
     let subPixelOffset2 = (-2.0 * subPixelOffset1 + 3.0) * subPixelOffset1 * subPixelOffset1;
     // Compute a sub-pixel offset based on this delta.
     let subPixelOffsetFinal = subPixelOffset2 * subPixelOffset2 * SUBPIXEL_QUALITY;
