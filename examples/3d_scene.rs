@@ -1,3 +1,5 @@
+//! This examples compares MSAA (Multi-Sample Anti-Aliasing) and FXAA (Fast Approximate Anti-Aliasing).
+
 use std::f32::consts::PI;
 
 use bevy::{
@@ -8,16 +10,15 @@ use bevy::{
     },
 };
 
-use bevy_mod_fxaa::{FXAAPlugin, Quality, FXAA};
-
 fn main() {
-    let mut app = App::new();
-    app.add_plugins(DefaultPlugins)
-        .add_plugin(FXAAPlugin) // Disables MSAA by default.
+    App::new()
+        // Disable MSAA be default
+        .insert_resource(Msaa { samples: 1 })
+        .add_plugins(DefaultPlugins)
+        .add_plugin(bevy_mod_fxaa::FxaaPlugin)
         .add_startup_system(setup)
-        .add_system(toggle_fxaa);
-
-    app.run();
+        .add_system(toggle_fxaa)
+        .run();
 }
 
 /// set up a simple 3D scene
@@ -28,6 +29,18 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
     asset_server: Res<AssetServer>,
 ) {
+    println!("Toggle with:");
+    println!("1 - NO AA");
+    println!("2 - MSAA 4");
+    println!("3 - FXAA (default)");
+
+    println!("Threshold:");
+    println!("6 - LOW");
+    println!("7 - MEDIUM");
+    println!("8 - HIGH (default)");
+    println!("9 - ULTRA");
+    println!("0 - EXTREME");
+
     // plane
     commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
@@ -35,14 +48,16 @@ fn setup(
         ..default()
     });
 
+    let cube_material = materials.add(StandardMaterial {
+        base_color_texture: Some(images.add(uv_debug_texture())),
+        ..default()
+    });
+
     // cubes
     for i in 0..5 {
         commands.spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 0.25 })),
-            material: materials.add(StandardMaterial {
-                base_color_texture: Some(images.add(uv_debug_texture())),
-                ..default()
-            }),
+            material: cube_material.clone(),
             transform: Transform::from_xyz(i as f32 * 0.25 - 1.0, 0.125, -i as f32 * 0.5),
             ..default()
         });
@@ -50,7 +65,7 @@ fn setup(
 
     // Flight Helmet
     commands.spawn(SceneBundle {
-        scene: asset_server.load("FlightHelmet/FlightHelmet.gltf#Scene0"),
+        scene: asset_server.load("models/FlightHelmet/FlightHelmet.gltf#Scene0"),
         ..default()
     });
 
@@ -90,21 +105,23 @@ fn setup(
                 .looking_at(Vec3::new(0.0, 0.3, 0.0), Vec3::Y),
             ..default()
         })
-        .insert(FXAA::default());
-
-    println!("Toggle with:\n1 - NO AA\n2 - MSAA 4\n3 - FXAA (default)");
-    println!("Threshold:\n7 - LOW\n8 - MEDIUM\n9 - HIGH (default)\n0 - ULTRA");
+        .insert(bevy_mod_fxaa::Fxaa::default());
 }
 
-fn toggle_fxaa(keys: Res<Input<KeyCode>>, mut query: Query<&mut FXAA>, mut msaa: ResMut<Msaa>) {
+fn toggle_fxaa(
+    keys: Res<Input<KeyCode>>,
+    mut query: Query<&mut bevy_mod_fxaa::Fxaa>,
+    mut msaa: ResMut<Msaa>,
+) {
     let set_no_aa = keys.just_pressed(KeyCode::Key1);
     let set_msaa = keys.just_pressed(KeyCode::Key2);
     let set_fxaa = keys.just_pressed(KeyCode::Key3);
-    let fxaa_low = keys.just_pressed(KeyCode::Key7);
-    let fxaa_med = keys.just_pressed(KeyCode::Key8);
-    let fxaa_high = keys.just_pressed(KeyCode::Key9);
-    let fxaa_ultra = keys.just_pressed(KeyCode::Key0);
-    let set_fxaa = set_fxaa | fxaa_low | fxaa_med | fxaa_high | fxaa_ultra;
+    let fxaa_low = keys.just_pressed(KeyCode::Key6);
+    let fxaa_med = keys.just_pressed(KeyCode::Key7);
+    let fxaa_high = keys.just_pressed(KeyCode::Key8);
+    let fxaa_ultra = keys.just_pressed(KeyCode::Key9);
+    let fxaa_extreme = keys.just_pressed(KeyCode::Key0);
+    let set_fxaa = set_fxaa | fxaa_low | fxaa_med | fxaa_high | fxaa_ultra | fxaa_extreme;
     for mut fxaa in &mut query {
         if set_msaa {
             fxaa.enabled = false;
@@ -120,17 +137,20 @@ fn toggle_fxaa(keys: Res<Input<KeyCode>>, mut query: Query<&mut FXAA>, mut msaa:
             msaa.samples = 1;
         }
         if fxaa_low {
-            fxaa.edge_threshold = Quality::Low;
-            fxaa.edge_threshold_min = Quality::Low;
+            fxaa.edge_threshold = bevy_mod_fxaa::Sensitivity::Low;
+            fxaa.edge_threshold_min = bevy_mod_fxaa::Sensitivity::Low;
         } else if fxaa_med {
-            fxaa.edge_threshold = Quality::Medium;
-            fxaa.edge_threshold_min = Quality::Medium;
+            fxaa.edge_threshold = bevy_mod_fxaa::Sensitivity::Medium;
+            fxaa.edge_threshold_min = bevy_mod_fxaa::Sensitivity::Medium;
         } else if fxaa_high {
-            fxaa.edge_threshold = Quality::High;
-            fxaa.edge_threshold_min = Quality::High;
+            fxaa.edge_threshold = bevy_mod_fxaa::Sensitivity::High;
+            fxaa.edge_threshold_min = bevy_mod_fxaa::Sensitivity::High;
         } else if fxaa_ultra {
-            fxaa.edge_threshold = Quality::Ultra;
-            fxaa.edge_threshold_min = Quality::Ultra;
+            fxaa.edge_threshold = bevy_mod_fxaa::Sensitivity::Ultra;
+            fxaa.edge_threshold_min = bevy_mod_fxaa::Sensitivity::Ultra;
+        } else if fxaa_extreme {
+            fxaa.edge_threshold = bevy_mod_fxaa::Sensitivity::Extreme;
+            fxaa.edge_threshold_min = bevy_mod_fxaa::Sensitivity::Extreme;
         }
         if set_fxaa {
             fxaa.enabled = true;
