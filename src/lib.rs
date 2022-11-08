@@ -89,7 +89,10 @@ impl ExtractComponent for Fxaa {
 }
 
 const FXAA_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 4182761465141723543);
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 4182416465141788543);
+
+const TO_LDR_SHADER_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 4112766465161723943);
 
 pub const FXAA_NODE_3D: &str = "fxaa_node_3d";
 pub const FXAA_NODE_2D: &str = "fxaa_node_2d";
@@ -99,6 +102,7 @@ pub struct FxaaPlugin;
 impl Plugin for FxaaPlugin {
     fn build(&self, app: &mut App) {
         load_internal_asset!(app, FXAA_SHADER_HANDLE, "fxaa.wgsl", Shader::from_wgsl);
+        load_internal_asset!(app, TO_LDR_SHADER_HANDLE, "to_ldr.wgsl", Shader::from_wgsl);
 
         app.add_plugin(ExtractComponentPlugin::<Fxaa>::default());
 
@@ -108,6 +112,7 @@ impl Plugin for FxaaPlugin {
         };
         render_app
             .init_resource::<FxaaPipeline>()
+            .init_resource::<ToLdrPipeline>()
             .init_resource::<SpecializedRenderPipelines<FxaaPipeline>>()
             .add_system_to_stage(RenderStage::Prepare, prepare_fxaa_pipelines);
 
@@ -128,13 +133,10 @@ impl Plugin for FxaaPlugin {
                 .unwrap();
 
             graph
-                .add_node_edge(core_3d::graph::node::TONEMAPPING, FXAA_NODE_3D)
+                .add_node_edge(core_3d::graph::node::MAIN_PASS, FXAA_NODE_3D)
                 .unwrap();
             graph
-                .add_node_edge(
-                    FXAA_NODE_3D,
-                    core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-                )
+                .add_node_edge(FXAA_NODE_3D, core_3d::graph::node::TONEMAPPING)
                 .unwrap();
         }
         {
@@ -154,13 +156,10 @@ impl Plugin for FxaaPlugin {
                 .unwrap();
 
             graph
-                .add_node_edge(core_2d::graph::node::TONEMAPPING, FXAA_NODE_2D)
+                .add_node_edge(core_2d::graph::node::MAIN_PASS, FXAA_NODE_2D)
                 .unwrap();
             graph
-                .add_node_edge(
-                    FXAA_NODE_2D,
-                    core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-                )
+                .add_node_edge(FXAA_NODE_2D, core_2d::graph::node::TONEMAPPING)
                 .unwrap();
         }
     }
@@ -200,10 +199,45 @@ impl FromWorld for FxaaPipeline {
         FxaaPipeline { texture_bind_group }
     }
 }
+#[derive(Resource, Deref)]
+pub struct ToLdrPipeline {
+    texture_bind_group: BindGroupLayout,
+}
+
+impl FromWorld for ToLdrPipeline {
+    fn from_world(render_world: &mut World) -> Self {
+        let texture_bind_group = render_world
+            .resource::<RenderDevice>()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("fxaa_to_ldr_texture_bind_group_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        ToLdrPipeline { texture_bind_group }
+    }
+}
 
 #[derive(Component)]
-pub struct CameraFxaaPipeline {
-    pub pipeline_id: CachedRenderPipelineId,
+pub struct CameraFxaaPipelines {
+    pub fxaa_pipeline_id: CachedRenderPipelineId,
+    pub to_ldr_pipeline_id: CachedRenderPipelineId,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -217,16 +251,20 @@ impl SpecializedRenderPipeline for FxaaPipeline {
     type Key = FxaaPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let mut shader_defs = vec![
+            format!("EDGE_THRESH_{}", key.edge_threshold.get_str()),
+            format!("EDGE_THRESH_MIN_{}", key.edge_threshold_min.get_str()),
+        ];
+        if key.texture_format == ViewTarget::TEXTURE_FORMAT_HDR {
+            shader_defs.push(String::from("HDR"))
+        }
         RenderPipelineDescriptor {
             label: Some("fxaa".into()),
             layout: Some(vec![self.texture_bind_group.clone()]),
             vertex: fullscreen_shader_vertex_state(),
             fragment: Some(FragmentState {
                 shader: FXAA_SHADER_HANDLE.typed(),
-                shader_defs: vec![
-                    format!("EDGE_THRESH_{}", key.edge_threshold.get_str()),
-                    format!("EDGE_THRESH_MIN_{}", key.edge_threshold_min.get_str()),
-                ],
+                shader_defs,
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     format: key.texture_format,
@@ -246,13 +284,14 @@ pub fn prepare_fxaa_pipelines(
     mut pipeline_cache: ResMut<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<FxaaPipeline>>,
     fxaa_pipeline: Res<FxaaPipeline>,
+    to_ldr_pipeline: Res<ToLdrPipeline>,
     views: Query<(Entity, &ExtractedView, &Fxaa)>,
 ) {
     for (entity, view, fxaa) in &views {
         if !fxaa.enabled {
             continue;
         }
-        let pipeline_id = pipelines.specialize(
+        let fxaa_pipeline_id = pipelines.specialize(
             &mut pipeline_cache,
             &fxaa_pipeline,
             FxaaPipelineKey {
@@ -266,8 +305,28 @@ pub fn prepare_fxaa_pipelines(
             },
         );
 
-        commands
-            .entity(entity)
-            .insert(CameraFxaaPipeline { pipeline_id });
+        let to_ldr_pipeline_id = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+            label: Some("fxaa".into()),
+            layout: Some(vec![to_ldr_pipeline.clone()]),
+            vertex: fullscreen_shader_vertex_state(),
+            fragment: Some(FragmentState {
+                shader: TO_LDR_SHADER_HANDLE.typed(),
+                shader_defs: Vec::new(),
+                entry_point: "fragment".into(),
+                targets: vec![Some(ColorTargetState {
+                    format: ViewTarget::TEXTURE_FORMAT_HDR,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+        });
+
+        commands.entity(entity).insert(CameraFxaaPipelines {
+            fxaa_pipeline_id,
+            to_ldr_pipeline_id,
+        });
     }
 }
