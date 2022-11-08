@@ -217,16 +217,22 @@ impl SpecializedRenderPipeline for FxaaPipeline {
     type Key = FxaaPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let mut shader_defs = vec![
+            format!("EDGE_THRESH_{}", key.edge_threshold.get_str()),
+            format!("EDGE_THRESH_MIN_{}", key.edge_threshold_min.get_str()),
+        ];
+
+        if key.texture_format == ViewTarget::TEXTURE_FORMAT_HDR {
+            shader_defs.push(String::from("HDR"));
+        }
+
         RenderPipelineDescriptor {
             label: Some("fxaa".into()),
             layout: Some(vec![self.texture_bind_group.clone()]),
             vertex: fullscreen_shader_vertex_state(),
             fragment: Some(FragmentState {
                 shader: FXAA_SHADER_HANDLE.typed(),
-                shader_defs: vec![
-                    format!("EDGE_THRESH_{}", key.edge_threshold.get_str()),
-                    format!("EDGE_THRESH_MIN_{}", key.edge_threshold_min.get_str()),
-                ],
+                shader_defs,
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     format: key.texture_format,

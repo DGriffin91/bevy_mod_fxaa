@@ -98,7 +98,7 @@ fn setup(
     commands
         .spawn(Camera3dBundle {
             camera: Camera {
-                hdr: false, // Works with and without hdr
+                hdr: true, // Works with and without hdr
                 ..default()
             },
             transform: Transform::from_xyz(0.7, 0.7, 1.0)

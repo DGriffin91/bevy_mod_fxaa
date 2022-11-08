@@ -7,6 +7,7 @@
 // Tweaks by mrDIMAS - https://github.com/FyroxEngine/Fyrox/blob/master/src/renderer/shaders/fxaa_fs.glsl
 
 #import bevy_core_pipeline::fullscreen_vertex_shader
+#import bevy_core_pipeline::tonemapping
 
 @group(0) @binding(0)
 var screenTexture: texture_2d<f32>;
@@ -73,6 +74,14 @@ fn rgb2luma(rgb: vec3<f32>) -> f32 {
     return sqrt(dot(rgb, vec3<f32>(0.299, 0.587, 0.114)));
 }
 
+fn tonemap(rgb: vec3<f32>) -> vec3<f32> {
+#ifdef HDR
+    return reinhard_luminance(rgb);
+#else
+    return rgb;
+#endif
+}
+
 // Performs FXAA post-process anti-aliasing as described in the Nvidia FXAA white paper and the associated shader code.
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -82,16 +91,16 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let texCoord = in.position.xy * inverseScreenSize;
 
     let centerSample = textureSampleLevel(screenTexture, samp, texCoord, 0.0);
-    let colorCenter = centerSample.rgb;
+    let colorCenter = tonemap(centerSample.rgb);
 
     // Luma at the current fragment
     let lumaCenter = rgb2luma(colorCenter);
 
     // Luma at the four direct neighbours of the current fragment.
-    let lumaDown = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(0, -1)).rgb);
-    let lumaUp = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(0, 1)).rgb);
-    let lumaLeft = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(-1, 0)).rgb);
-    let lumaRight = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(1, 0)).rgb);
+    let lumaDown = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(0, -1)).rgb));
+    let lumaUp = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(0, 1)).rgb));
+    let lumaLeft = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(-1, 0)).rgb));
+    let lumaRight = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(1, 0)).rgb));
 
     // Find the maximum and minimum luma around the current fragment.
     let lumaMin = min(lumaCenter, min(min(lumaDown, lumaUp), min(lumaLeft, lumaRight)));
@@ -106,10 +115,10 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
 
     // Query the 4 remaining corners lumas.
-    let lumaDownLeft  = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(-1, -1)).rgb);
-    let lumaUpRight   = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(1, 1)).rgb);
-    let lumaUpLeft    = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(-1, 1)).rgb);
-    let lumaDownRight = rgb2luma(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(1, -1)).rgb);
+    let lumaDownLeft  = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(-1, -1)).rgb));
+    let lumaUpRight   = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(1, 1)).rgb));
+    let lumaUpLeft    = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(-1, 1)).rgb));
+    let lumaDownRight = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, texCoord, 0.0, vec2<i32>(1, -1)).rgb));
 
     // Combine the four edges lumas (using intermediary variables for future computations with the same values).
     let lumaDownUp = lumaDown + lumaUp;
@@ -177,8 +186,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var uv2 = currentUv + offset; // * QUALITY(0); // (quality 0 is 1.0)
 
     // Read the lumas at both current extremities of the exploration segment, and compute the delta wrt to the local average luma.
-    var lumaEnd1 = rgb2luma(textureSampleLevel(screenTexture, samp, uv1, 0.0).rgb);
-    var lumaEnd2 = rgb2luma(textureSampleLevel(screenTexture, samp, uv2, 0.0).rgb);
+    var lumaEnd1 = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, uv1, 0.0).rgb));
+    var lumaEnd2 = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, uv2, 0.0).rgb));
     lumaEnd1 = lumaEnd1 - lumaLocalAverage;
     lumaEnd2 = lumaEnd2 - lumaLocalAverage;
 
@@ -196,12 +205,12 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         for (var i: i32 = 2; i < ITERATIONS; i = i + 1) {
             // If needed, read luma in 1st direction, compute delta.
             if (!reached1) { 
-                lumaEnd1 = rgb2luma(textureSampleLevel(screenTexture, samp, uv1, 0.0).rgb);
+                lumaEnd1 = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, uv1, 0.0).rgb));
                 lumaEnd1 = lumaEnd1 - lumaLocalAverage;
             }
             // If needed, read luma in opposite direction, compute delta.
             if (!reached2) { 
-                lumaEnd2 = rgb2luma(textureSampleLevel(screenTexture, samp, uv2, 0.0).rgb);
+                lumaEnd2 = rgb2luma(tonemap(textureSampleLevel(screenTexture, samp, uv2, 0.0).rgb));
                 lumaEnd2 = lumaEnd2 - lumaLocalAverage;
             }
             // If the luma deltas at the current extremities is larger than the local gradient, we have reached the side of the edge.
