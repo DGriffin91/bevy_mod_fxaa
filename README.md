@@ -17,4 +17,4 @@ commands
     .insert(FXAA::default());
 ```
 
-Currently depends on bevy 0.9.0-dev.
+Currently depends on bevy 0.9.
